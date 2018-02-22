@@ -199,9 +199,38 @@ void loadCylinder(Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<uns
     renderMesh.loadNormals(normList);
 }
 
+/// Loads a .obj file from the given filepath, transfers position, index, & normal data into vectors, loads vectors into renderMesh
+/// Based off code from: https://en.wikibooks.org/wiki/OpenGL_Programming/Modern_OpenGL_Tutorial_Load_OBJ
+bool loadObjIfstream(const char * path, Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<unsigned int> &indexList){
+    std::ifstream in(path, std::ios::in);
+    if(!in){
+        printf("File not found.");
+        return false;
+    }
+
+    std::string line;
+    while(getline(in,line)){
+        if(line.substr(0,2) == "v"){
+            std::istringstream s(line.substr(2));
+            Vec3 v; s >> v[0]; s >> v[1]; s >> v[2];
+            vertList.push_back(v);
+        }else if(line.substr(0,2) == "f"){
+            std::istringstream s(line.substr(2));
+            unsigned int a,b,c;
+            s >> a; s >> b; s >> c;
+            indexList.push_back(a);
+            indexList.push_back(b);
+            indexList.push_back(c);
+        }
+    }
+
+    renderMesh.loadVertices(vertList, indexList);
+
+}
+
 /// Loads a .obj file from the given filepath, transfers position, texture, index, & normal data into vectors, loads vectors into renderMesh
 /// Based off code from: http://www.opengl-tutorial.org/beginners-tutorials/tutorial-7-model-loading/
-bool loadObj(const char * path, Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<Vec2> &tCoordList, std::vector<unsigned int> &indexList, std::vector<Vec3> &normList){
+bool loadObjFopen(const char * path, Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<Vec2> &tCoordList, std::vector<unsigned int> &indexList, std::vector<Vec3> &normList){
 
     FILE * file = fopen(path,"r");
 
@@ -269,7 +298,7 @@ int main() {
     float height = 2.0f;
 
     /// Load cube vertices, indices, and normals (pending)
-    loadCube(renderMesh, vertList, indexList, normList, origin, size);
+    //loadCube(renderMesh, vertList, indexList, normList, origin, size);
 
     /// Load sphere vertices, indices, and normals (pending)
     //loadIcoSphere(renderMesh, vertList, indexList, normList, origin, size, 1);
@@ -279,7 +308,8 @@ int main() {
 
     /// Load mesh from .obj filepath
     const char * path = "bunny.obj";
-    //loadObj("CMakeLists.txt", renderMesh, vertList, tCoordList, indexList, normList);
+    //loadObjFopen(path, renderMesh, vertList, tCoordList, indexList, normList);
+    //loadObjIfstream(path, renderMesh, vertList, indexList);
 
     /// TODO: get textures working
 
