@@ -7,6 +7,7 @@
 #include "Mesh/Mesh.h"
 #include "OpenGP/GL/glfw_helpers.h"
 
+#include <cstdio>
 #include <OpenGP/types.h>
 #include <OpenGP/MLogger.h>
 #include <OpenGP/GL/Application.h>
@@ -14,6 +15,19 @@
 
 using namespace OpenGP;
 const float pi = 4*atan(1);
+
+/// Calculates the normal of a triangle in 3-space based on the given 3 points
+Vec3 calculateNormal(Vec3 A, Vec3 B){
+    return A.cross(B);    //might be backwards; double-check
+}
+
+/// Produces a normal for each triangle & adds it to normList
+void getNormals(std::vector<Vec3> &vertList, std::vector<unsigned int> & indexList, std::vector<Vec3> &normList){
+    for(int i = 0; i < indexList.size(); i+=3){
+        Vec3 normal = calculateNormal(vertList[indexList[i]],vertList[indexList[i+1]]);
+        normList.push_back(normal);
+    }
+}
 
 /// Loads a cube into renderMesh via vertList, indexList, and normList, with the given origin point & side length
 void loadCube(Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<unsigned int> &indexList, std::vector<Vec3> &normList, Vec3 origin, float side){
@@ -38,7 +52,8 @@ void loadCube(Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<unsigne
 
     renderMesh.loadVertices(vertList, indexList);
 
-    ///TODO: figure out normals
+    getNormals(vertList,indexList,normList);
+
     renderMesh.loadNormals(normList);
 }
 
@@ -103,7 +118,8 @@ void loadIcoSphere(Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<un
 
     renderMesh.loadVertices(vertList, indexList);
 
-    ///TODO: figure out normals
+    getNormals(vertList,indexList,normList);
+
     renderMesh.loadNormals(normList);
 
 }
@@ -177,6 +193,54 @@ void loadCylinder(Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<uns
     indexList.push_back(numVerts-1);
 
     renderMesh.loadVertices(vertList, indexList);
+
+    getNormals(vertList,indexList,normList);
+
+    renderMesh.loadNormals(normList);
+}
+
+/// Loads a .obj file from the given filepath, transfers position, texture, index, & normal data into vectors, loads vectors into renderMesh
+/// Based off code from: http://www.opengl-tutorial.org/beginners-tutorials/tutorial-7-model-loading/
+bool loadObj(const char * path, Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<Vec2> &tCoordList, std::vector<unsigned int> &indexList, std::vector<Vec3> &normList){
+
+    FILE * file = fopen(path,"r");
+
+    if(file == NULL){
+        printf("File not found.");
+        return false;
+    }
+
+    while(1){
+        char lineHeader[128];
+
+        int res = fscanf(file, "%s", lineHeader);
+        if(res == EOF){
+            break;
+        }
+
+        if(strcmp(lineHeader, "v") == 0){
+            Vec3 vertex;
+            fscanf(file, "%f %f %f\n", &vertex[0],&vertex[1],&vertex[2]);
+            vertList.push_back(vertex);
+        }/*else if(strcmp(lineHeader, "vt") == 0){
+            Vec2 uv;
+            fscanf(file, "%f %f\n", &uv[0], &uv[1]);
+            tCoordList.push_back(uv);
+        }else if(strcmp(lineHeader, "vn") == 0){
+            Vec3 normal;
+            fscanf(file, "%f %f %f\n", &normal[0], &normal[1], &normal[2]);
+            normList.push_back(normal);
+        }*/else if(strcmp(lineHeader, "f") == 0){
+            unsigned int vertexIndex[3];
+            fscanf(file, "%d/%d/%d\n", &vertexIndex[0], &vertexIndex[1], &vertexIndex[2]);  //update this to work with %d/%d/%d
+            indexList.push_back(vertexIndex[0]);
+            indexList.push_back(vertexIndex[1]);
+            indexList.push_back(vertexIndex[2]);
+        }
+    }
+
+    renderMesh.loadVertices(vertList, indexList);
+    renderMesh.loadNormals(normList);
 }
 
 int main() {
@@ -194,23 +258,28 @@ int main() {
         /// -cylinder
         /// -read in .obj file
 
-    /// Initialize vector/index/normal lists
+    /// Initialize vector/textures/index/normal lists
     std::vector<Vec3> vertList;
+    std::vector<Vec2> tCoordList;
     std::vector<unsigned int> indexList;
     std::vector<Vec3> normList;
 
     Vec3 origin = Vec3(0.0f,0.0f,0.0f);
-    float size = 0.5f;
+    float size = 1.0f;
     float height = 2.0f;
 
     /// Load cube vertices, indices, and normals (pending)
-    //loadCube(renderMesh, vertList, indexList, normList, origin, size);
+    loadCube(renderMesh, vertList, indexList, normList, origin, size);
 
     /// Load sphere vertices, indices, and normals (pending)
     //loadIcoSphere(renderMesh, vertList, indexList, normList, origin, size, 1);
 
     /// Load cylinder vertices, indices, and normals (pending)
-    loadCylinder(renderMesh, vertList, indexList, normList, origin, size, height, 12);
+    //loadCylinder(renderMesh, vertList, indexList, normList, origin, size, height, 12);
+
+    /// Load mesh from .obj filepath
+    const char * path = "bunny.obj";
+    //loadObj("CMakeLists.txt", renderMesh, vertList, tCoordList, indexList, normList);
 
     /// TODO: get textures working
 
@@ -218,7 +287,6 @@ int main() {
     renderMesh.loadTextures("earth.png");
 
     /// Load texture coordinates (assumes textures)
-    std::vector<Vec2> tCoordList;
     tCoordList.push_back(Vec2(0,0));
     tCoordList.push_back(Vec2(1,0));
     tCoordList.push_back(Vec2(1,1));
