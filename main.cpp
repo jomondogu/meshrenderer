@@ -32,33 +32,43 @@ void getNormals(std::vector<Vec3> &vertList, std::vector<unsigned int> & indexLi
 /// Maps the given point to UV-coordinates on a sphere with origin o & radius r
 Vec2 sphereMap(Vec3 p, Vec3 o, float r){
     float the, phi, u, v;
-    //indices may need to change (x = left->right, y = down->up, z = in->out)
     the = atan2(p[0]-o[0],p[2]-o[2]);
     phi = acos((p[1]-o[1])/r);
-    v = phi/2*pi;
-    u = (pi-the)/pi;
-    return Vec2(-u,-v);
+    v = -phi/2*pi;
+    u = -(pi-the)/pi;
+    return Vec2(u,v/4); //fix this; coords shouldn't need hard-coded division
+}
+
+
+///Returns the midpoint between two points
+Vec3 getMidpoint(Vec3 A, Vec3 B){
+    return Vec3((A[0]+B[0])/2.0,(A[1]+B[1])/2,(A[2]+B[2])/2);   //this doesn't check for duplicates :(
 }
 
 /// Loads a cube into renderMesh via vertList, indexList, and normList, with the given origin point & side length
 void loadCube(Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<Vec2> &tCoordList, std::vector<unsigned int> &indexList, std::vector<Vec3> &normList, const char * texFile, Vec3 origin, float side){
-    std::vector<int> indices = {0,1,2,2,3,0,4,0,3,3,7,4,7,4,5,5,6,7,1,5,6,6,2,1,1,0,4,4,5,1,2,3,7,7,6,2};
+    std::vector<int> vertIndices = {1,2,3,4,7,6,4,5,1,1,5,6,6,7,3,4,0,3,0,1,3,5,4,6,0,4,1,2,1,6,2,6,3,7,4,3};
+    std::vector<int> texIndices = {0,1,2,2,3,0,2,3,0,1,2,3,2,3,0,3,0,1,3,0,2,1,2,0,1,2,0,0,1,3,1,2,0,2,3,1};
+    std::vector<Vec2> texUVs = {Vec2(0,0),Vec2(1,0),Vec2(1,1),Vec2(0,1)};
 
-    float dx = origin[0]+side;
-    float dy = origin[1]+side;
-    float dz = origin[2]+side;
+    float dx = origin[0]+side/2;
+    float dy = origin[1]+side/2;
+    float dz = origin[2]+side/2;
+    float mdx = origin[0]-side/2;
+    float mdy = origin[1]-side/2;
+    float mdz = origin[2]-side/2;
 
-    vertList.push_back(origin);                         //0
-    vertList.push_back(Vec3(dx,origin[1],origin[2]));   //1
-    vertList.push_back(Vec3(dx,dy,origin[2]));          //2
-    vertList.push_back(Vec3(origin[0],dy,origin[2]));   //3
-    vertList.push_back(Vec3(origin[0],origin[1],dz));   //4
-    vertList.push_back(Vec3(dx,origin[1],dz));          //5
-    vertList.push_back(Vec3(dx,dy,dz));                 //6
-    vertList.push_back(Vec3(origin[0],dy,dz));          //7
+    vertList.push_back(Vec3(dx,mdy,mdz));   //0
+    vertList.push_back(Vec3(mdx,dy,mdz));   //1
+    vertList.push_back(Vec3(mdx,mdy,dz));   //2
+    vertList.push_back(Vec3(mdx,mdy,mdz));  //3
+    vertList.push_back(Vec3(dx,dy,mdz));    //4
+    vertList.push_back(Vec3(dx,dy,dz));     //5
+    vertList.push_back(Vec3(mdx,dy,dz));    //6
+    vertList.push_back(Vec3(dx,mdy,dz));    //7
 
-    for(int i = 0; i < indices.size(); i++){
-        indexList.push_back(indices[i]);
+    for(int i = 0; i < vertIndices.size(); i++){
+        indexList.push_back(vertIndices[i]);
     }
 
     renderMesh.loadVertices(vertList, indexList);
@@ -71,13 +81,15 @@ void loadCube(Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<Vec2> &
     renderMesh.loadTextures(texFile);
 
     /// Load texture coordinates (assumes textures)
+    /*for(int i = 0; i < texIndices.size(); i++){
+        tCoordList.push_back(texUVs[texIndices[i]]);
+    }*/
+    for(int i = 0; i < vertList.size(); i++){
+        Vec2 uv = sphereMap(vertList[i], origin, side);
+        tCoordList.push_back(uv);
+    }
 
     renderMesh.loadTexCoords(tCoordList);
-}
-
-///Returns the midpoint between two points on a triangle
-Vec3 getMidpoint(Vec3 A, Vec3 B){
-    return Vec3((A[0]+B[0])/2.0,(A[1]+B[1])/2,(A[2]+B[2])/2);   //this doesn't check for duplicates :(
 }
 
 /// Loads an icosphere into renderMesh via vertList, indexList, and normList, with the given origin point, radius, & level of subdivision (pending)
@@ -204,7 +216,6 @@ void loadIcoSphere(Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<Ve
     renderMesh.loadTextures(texFile);
 
     /// Load texture coordinates (assumes textures)
-    /// TODO: add texcoords
     for(int i = 0; i < vertList.size(); i++){
         Vec2 uv = sphereMap(vertList[i], origin, radius);
         tCoordList.push_back(uv);
@@ -291,13 +302,16 @@ void loadCylinder(Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<Vec
     renderMesh.loadTextures(texFile);
 
     /// Load texture coordinates (assumes textures)
-    /// TODO: add texcoords
+    for(int i = 0; i < vertList.size(); i++){
+        Vec2 uv = sphereMap(vertList[i], origin, radius);
+        tCoordList.push_back(uv);
+    }
     renderMesh.loadTexCoords(tCoordList);
 }
 
 /// Loads a .obj file from the given filepath, transfers position, texture, index, & normal data into vectors, loads vectors into renderMesh
 /// Based off code from: http://www.opengl-tutorial.org/beginners-tutorials/tutorial-7-model-loading/
-bool loadObj(const char * path, Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<Vec2> &tCoordList, std::vector<unsigned int> &indexList, std::vector<Vec3> &normList, const char * texFile){
+bool loadObj(const char * path, Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<Vec2> &tCoordList, std::vector<unsigned int> &indexList, std::vector<Vec3> &normList){
 
     FILE * file = fopen(path,"r");
 
@@ -314,7 +328,6 @@ bool loadObj(const char * path, Mesh &renderMesh, std::vector<Vec3> &vertList, s
             break;
         }
         //issue: generates bizarre wireframe
-        ///TODO: add in vn, vt, and bools to track them
 
         if(strcmp(lineHeader, "v") == 0){
             Vec3 vertex;
@@ -331,14 +344,6 @@ bool loadObj(const char * path, Mesh &renderMesh, std::vector<Vec3> &vertList, s
 
     renderMesh.loadVertices(vertList, indexList);
     renderMesh.loadNormals(normList);
-
-    /// Load textures (assumes texcoords)
-    renderMesh.loadTextures(texFile);
-
-    /// Load texture coordinates (assumes textures)
-    renderMesh.loadTexCoords(tCoordList);
-
-    return true;
 }
 
 /// Writes a .obj file from the current renderMesh to the build directory
@@ -378,7 +383,7 @@ int main() {
 
     Vec3 origin = Vec3(0.0f,0.0f,0.0f);
     float size = 1.0f;
-    float height = 0.1f;
+    float height = 1.0f;
     const char * objFile = "bunny.obj";
     const char * texFile = "earth.png";
 
@@ -386,13 +391,13 @@ int main() {
     //loadCube(renderMesh, vertList, tCoordList, indexList, normList, texFile, origin, size);
 
     /// Load sphere vertices, indices, and normals (pending)
-    loadIcoSphere(renderMesh, vertList, tCoordList, indexList, normList, texFile, origin, size, 4);
+    //loadIcoSphere(renderMesh, vertList, tCoordList, indexList, normList, texFile, origin, size, 4);
 
     /// Load cylinder vertices, indices, and normals (pending)
     //loadCylinder(renderMesh, vertList, tCoordList, indexList, normList, texFile, origin, size, height, 100);
 
     /// Load mesh from .obj filepath
-    //loadObj(objFile, renderMesh, vertList, tCoordList, indexList, normList);
+    loadObj(objFile, renderMesh, vertList, tCoordList, indexList, normList);
 
     writeObj(vertList,indexList);
 
