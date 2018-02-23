@@ -29,8 +29,19 @@ void getNormals(std::vector<Vec3> &vertList, std::vector<unsigned int> & indexLi
     }
 }
 
+/// Maps the given point to UV-coordinates on a sphere with origin o & radius r
+Vec2 sphereMap(Vec3 p, Vec3 o, float r){
+    float the, phi, u, v;
+    //indices may need to change (x = left->right, y = down->up, z = in->out)
+    the = atan2(p[0]-o[0],p[2]-o[2]);
+    phi = acos((p[1]-o[1])/r);
+    v = phi/2*pi;
+    u = (pi-the)/pi;
+    return Vec2(-u,-v);
+}
+
 /// Loads a cube into renderMesh via vertList, indexList, and normList, with the given origin point & side length
-void loadCube(Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<unsigned int> &indexList, std::vector<Vec3> &normList, Vec3 origin, float side){
+void loadCube(Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<Vec2> &tCoordList, std::vector<unsigned int> &indexList, std::vector<Vec3> &normList, const char * texFile, Vec3 origin, float side){
     std::vector<int> indices = {0,1,2,2,3,0,4,0,3,3,7,4,7,4,5,5,6,7,1,5,6,6,2,1,1,0,4,4,5,1,2,3,7,7,6,2};
 
     float dx = origin[0]+side;
@@ -55,6 +66,13 @@ void loadCube(Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<unsigne
     getNormals(vertList,indexList,normList);
 
     renderMesh.loadNormals(normList);
+
+    /// Load textures (assumes texcoords)
+    renderMesh.loadTextures(texFile);
+
+    /// Load texture coordinates (assumes textures)
+
+    renderMesh.loadTexCoords(tCoordList);
 }
 
 ///Returns the midpoint between two points on a triangle
@@ -65,7 +83,7 @@ Vec3 getMidpoint(Vec3 A, Vec3 B){
 /// Loads an icosphere into renderMesh via vertList, indexList, and normList, with the given origin point, radius, & level of subdivision (pending)
 /// based off pseudocode from: https://www.csee.umbc.edu/~squire/reference/polyhedra.shtml#icosahedron
 /// plus subdivision algorithm from http://blog.andreaskahler.com/2009/06/creating-icosphere-mesh-in-code.html
-void loadIcoSphere(Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<unsigned int> &indexList, std::vector<Vec3> &normList, Vec3 origin, float radius, int sublevel){
+void loadIcoSphere(Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<Vec2> &tCoordList, std::vector<unsigned int> &indexList, std::vector<Vec3> &normList, const char * texFile, Vec3 origin, float radius, int sublevel){
     float vertices[12][3];      //icosahedron x,y,z coordinates
     std::vector<int> indices = {0,1,2,0,2,3,0,3,4,0,4,5,0,5,1,11,6,7,11,7,8,11,8,9,11,9,10,11,10,6,1,2,6,2,3,7,3,4,8,4,5,9,5,1,10,6,7,2,7,8,3,8,9,4,9,10,5,10,6,1};
 
@@ -182,10 +200,21 @@ void loadIcoSphere(Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<un
 
     renderMesh.loadNormals(normList);
 
+    /// Load textures (assumes texcoords)
+    renderMesh.loadTextures(texFile);
+
+    /// Load texture coordinates (assumes textures)
+    /// TODO: add texcoords
+    for(int i = 0; i < vertList.size(); i++){
+        Vec2 uv = sphereMap(vertList[i], origin, radius);
+        tCoordList.push_back(uv);
+    }
+    renderMesh.loadTexCoords(tCoordList);
+
 }
 
 /// Loads a cylinder into renderMesh via vertList, indexList, and normList, with the given origin point, radius, height, & subvidision level
-void loadCylinder(Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<unsigned int> &indexList, std::vector<Vec3> &normList, Vec3 origin, float radius, float height, int sublevel){
+void loadCylinder(Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<Vec2> &tCoordList, std::vector<unsigned int> &indexList, std::vector<Vec3> &normList, const char * texFile, Vec3 origin, float radius, float height, int sublevel){
     if(sublevel < 4){
         sublevel = 4;
     }
@@ -257,11 +286,18 @@ void loadCylinder(Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<uns
     getNormals(vertList,indexList,normList);
 
     renderMesh.loadNormals(normList);
+
+    /// Load textures (assumes texcoords)
+    renderMesh.loadTextures(texFile);
+
+    /// Load texture coordinates (assumes textures)
+    /// TODO: add texcoords
+    renderMesh.loadTexCoords(tCoordList);
 }
 
 /// Loads a .obj file from the given filepath, transfers position, texture, index, & normal data into vectors, loads vectors into renderMesh
 /// Based off code from: http://www.opengl-tutorial.org/beginners-tutorials/tutorial-7-model-loading/
-bool loadObj(const char * path, Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<Vec2> &tCoordList, std::vector<unsigned int> &indexList, std::vector<Vec3> &normList){
+bool loadObj(const char * path, Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<Vec2> &tCoordList, std::vector<unsigned int> &indexList, std::vector<Vec3> &normList, const char * texFile){
 
     FILE * file = fopen(path,"r");
 
@@ -278,6 +314,7 @@ bool loadObj(const char * path, Mesh &renderMesh, std::vector<Vec3> &vertList, s
             break;
         }
         //issue: generates bizarre wireframe
+        ///TODO: add in vn, vt, and bools to track them
 
         if(strcmp(lineHeader, "v") == 0){
             Vec3 vertex;
@@ -294,6 +331,14 @@ bool loadObj(const char * path, Mesh &renderMesh, std::vector<Vec3> &vertList, s
 
     renderMesh.loadVertices(vertList, indexList);
     renderMesh.loadNormals(normList);
+
+    /// Load textures (assumes texcoords)
+    renderMesh.loadTextures(texFile);
+
+    /// Load texture coordinates (assumes textures)
+    renderMesh.loadTexCoords(tCoordList);
+
+    return true;
 }
 
 /// Writes a .obj file from the current renderMesh to the build directory
@@ -333,34 +378,23 @@ int main() {
 
     Vec3 origin = Vec3(0.0f,0.0f,0.0f);
     float size = 1.0f;
-    float height = 2.0f;
+    float height = 0.1f;
+    const char * objFile = "bunny.obj";
+    const char * texFile = "earth.png";
 
     /// Load cube vertices, indices, and normals (pending)
-    //loadCube(renderMesh, vertList, indexList, normList, origin, size);
+    //loadCube(renderMesh, vertList, tCoordList, indexList, normList, texFile, origin, size);
 
     /// Load sphere vertices, indices, and normals (pending)
-    //loadIcoSphere(renderMesh, vertList, indexList, normList, origin, size, 4);
+    loadIcoSphere(renderMesh, vertList, tCoordList, indexList, normList, texFile, origin, size, 4);
 
     /// Load cylinder vertices, indices, and normals (pending)
-    //loadCylinder(renderMesh, vertList, indexList, normList, origin, size, height, 12);
+    //loadCylinder(renderMesh, vertList, tCoordList, indexList, normList, texFile, origin, size, height, 100);
 
     /// Load mesh from .obj filepath
-    const char * path = "bunny.obj";
-    loadObj(path, renderMesh, vertList, tCoordList, indexList, normList);
+    //loadObj(objFile, renderMesh, vertList, tCoordList, indexList, normList);
 
     writeObj(vertList,indexList);
-
-    /// TODO: get textures working
-
-    /// Load textures (assumes texcoords)
-    renderMesh.loadTextures("earth.png");
-
-    /// Load texture coordinates (assumes textures)
-    tCoordList.push_back(Vec2(0,0));
-    tCoordList.push_back(Vec2(1,0));
-    tCoordList.push_back(Vec2(1,1));
-    tCoordList.push_back(Vec2(0,1));
-    renderMesh.loadTexCoords(tCoordList);
 
     /// Create main window, set callback function
     auto &window1 = app.create_window([&](Window &window){
@@ -373,7 +407,7 @@ int main() {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         /// Wireframe rendering, might be helpful when debugging your mesh generation
-        glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
+        //glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
 
         float ratio = width / (float) height;
         Mat4x4 modelTransform = Mat4x4::Identity();
