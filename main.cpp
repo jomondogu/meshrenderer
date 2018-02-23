@@ -57,16 +57,14 @@ void loadCube(Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<unsigne
     renderMesh.loadNormals(normList);
 }
 
-/// Loads a UVsphere into renderMesh via vertList, indexList, and normList, with the given origin point, radius, & level of subdivision
-void loadUVSphere(Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<unsigned int> &indexList, std::vector<Vec3> &normList, Vec3 origin, float radius, int sublevel){
-   // float vertices[][];
-    //from the origin, make a vector with radius length & (0,0,0) direction
-    //do subdivision times:
-        //do subdivision/2 times:
+///Returns the midpoint between two points on a triangle
+Vec3 getMidpoint(Vec3 A, Vec3 B){
+    return Vec3((A[0]+B[0])/2.0,(A[1]+B[1])/2,(A[2]+B[2])/2);   //this doesn't check for duplicates :(
 }
 
 /// Loads an icosphere into renderMesh via vertList, indexList, and normList, with the given origin point, radius, & level of subdivision (pending)
 /// based off pseudocode from: https://www.csee.umbc.edu/~squire/reference/polyhedra.shtml#icosahedron
+/// plus subdivision algorithm from http://blog.andreaskahler.com/2009/06/creating-icosphere-mesh-in-code.html
 void loadIcoSphere(Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<unsigned int> &indexList, std::vector<Vec3> &normList, Vec3 origin, float radius, int sublevel){
     float vertices[12][3];      //icosahedron x,y,z coordinates
     std::vector<int> indices = {0,1,2,0,2,3,0,3,4,0,4,5,0,5,1,11,6,7,11,7,8,11,8,9,11,9,10,11,10,6,1,2,6,2,3,7,3,4,8,4,5,9,5,1,10,6,7,2,7,8,3,8,9,4,9,10,5,10,6,1};
@@ -115,6 +113,68 @@ void loadIcoSphere(Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<un
     }
 
     ///TODO: Subdivide each triangle into 4
+    //subdivides first triangle, then performs strangely
+    for(int i = 0; i < sublevel; i++){
+        std::vector<Vec3> tempVertList;
+        std::vector<unsigned int> tempIndexList;
+        int index = 0;
+        for(int j = 0; j < indexList.size(); j+=3){
+            Vec3 A = vertList[indexList[j]];
+            Vec3 B = vertList[indexList[j+1]];
+            Vec3 C = vertList[indexList[j+2]];
+
+            //get midpoints of AB, AC, BC, move them out along the radius
+            Vec3 AB = getMidpoint(A,B);
+            AB = origin-AB;
+            AB = AB.normalized();
+            AB = radius*AB;
+            AB = origin - AB;
+
+            Vec3 AC = getMidpoint(A,C);
+            AC = origin-AC;
+            AC = AC.normalized();
+            AC = radius*AC;
+            AC = origin - AC;
+
+            Vec3 BC = getMidpoint(B,C);
+            BC = origin-BC;
+            BC = BC.normalized();
+            BC = radius*BC;
+            BC = origin - BC;
+
+            tempVertList.push_back(A);  //0
+            tempVertList.push_back(B);  //1
+            tempVertList.push_back(C);  //2
+
+            tempVertList.push_back(AB); //3
+            tempVertList.push_back(AC); //4
+            tempVertList.push_back(BC); //5
+
+            //add (A,AB,AC),(B,BC,AB),(C,AC,BC),(AB,BC,AC) to temp indexList
+            tempIndexList.push_back(index);
+            tempIndexList.push_back(index+3);
+            tempIndexList.push_back(index+4);
+
+            tempIndexList.push_back(index+1);
+            tempIndexList.push_back(index+3);
+            tempIndexList.push_back(index+5);
+
+            tempIndexList.push_back(index+2);
+            tempIndexList.push_back(index+4);
+            tempIndexList.push_back(index+5);
+
+            tempIndexList.push_back(index+3);
+            tempIndexList.push_back(index+4);
+            tempIndexList.push_back(index+5);
+
+            index+=6;
+
+        }
+
+        //replace lists with temps
+        vertList = tempVertList;
+        indexList = tempIndexList;
+    }
 
     renderMesh.loadVertices(vertList, indexList);
 
@@ -199,38 +259,9 @@ void loadCylinder(Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<uns
     renderMesh.loadNormals(normList);
 }
 
-/// Loads a .obj file from the given filepath, transfers position, index, & normal data into vectors, loads vectors into renderMesh
-/// Based off code from: https://en.wikibooks.org/wiki/OpenGL_Programming/Modern_OpenGL_Tutorial_Load_OBJ
-bool loadObjIfstream(const char * path, Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<unsigned int> &indexList){
-    std::ifstream in(path, std::ios::in);
-    if(!in){
-        printf("File not found.");
-        return false;
-    }
-
-    std::string line;
-    while(getline(in,line)){
-        if(line.substr(0,2) == "v"){
-            std::istringstream s(line.substr(2));
-            Vec3 v; s >> v[0]; s >> v[1]; s >> v[2];
-            vertList.push_back(v);
-        }else if(line.substr(0,2) == "f"){
-            std::istringstream s(line.substr(2));
-            unsigned int a,b,c;
-            s >> a; s >> b; s >> c;
-            indexList.push_back(a);
-            indexList.push_back(b);
-            indexList.push_back(c);
-        }
-    }
-
-    renderMesh.loadVertices(vertList, indexList);
-
-}
-
 /// Loads a .obj file from the given filepath, transfers position, texture, index, & normal data into vectors, loads vectors into renderMesh
 /// Based off code from: http://www.opengl-tutorial.org/beginners-tutorials/tutorial-7-model-loading/
-bool loadObjFopen(const char * path, Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<Vec2> &tCoordList, std::vector<unsigned int> &indexList, std::vector<Vec3> &normList){
+bool loadObj(const char * path, Mesh &renderMesh, std::vector<Vec3> &vertList, std::vector<Vec2> &tCoordList, std::vector<unsigned int> &indexList, std::vector<Vec3> &normList){
 
     FILE * file = fopen(path,"r");
 
@@ -246,30 +277,42 @@ bool loadObjFopen(const char * path, Mesh &renderMesh, std::vector<Vec3> &vertLi
         if(res == EOF){
             break;
         }
+        //issue: generates bizarre wireframe
 
         if(strcmp(lineHeader, "v") == 0){
             Vec3 vertex;
-            fscanf(file, "%f %f %f\n", &vertex[0],&vertex[1],&vertex[2]);
+            fscanf(file, "%f %f %f\n",&vertex[0],&vertex[1],&vertex[2]);
             vertList.push_back(vertex);
-        }/*else if(strcmp(lineHeader, "vt") == 0){
-            Vec2 uv;
-            fscanf(file, "%f %f\n", &uv[0], &uv[1]);
-            tCoordList.push_back(uv);
-        }else if(strcmp(lineHeader, "vn") == 0){
-            Vec3 normal;
-            fscanf(file, "%f %f %f\n", &normal[0], &normal[1], &normal[2]);
-            normList.push_back(normal);
-        }*/else if(strcmp(lineHeader, "f") == 0){
-            unsigned int vertexIndex[3];
-            fscanf(file, "%d/%d/%d\n", &vertexIndex[0], &vertexIndex[1], &vertexIndex[2]);  //update this to work with %d/%d/%d
-            indexList.push_back(vertexIndex[0]);
-            indexList.push_back(vertexIndex[1]);
-            indexList.push_back(vertexIndex[2]);
+        }else if(strcmp(lineHeader, "f") == 0){
+            unsigned int v1,v2,v3;
+            fscanf(file, "%d %d %d\n",&v1,&v2,&v3);
+            indexList.push_back(v1);
+            indexList.push_back(v2);
+            indexList.push_back(v3);
         }
     }
 
     renderMesh.loadVertices(vertList, indexList);
     renderMesh.loadNormals(normList);
+}
+
+/// Writes a .obj file from the current renderMesh to the build directory
+void writeObj(std::vector<Vec3> &vertList, std::vector<unsigned int> &indexList){
+
+    std::ofstream ofs ("output.obj",std::ofstream::out);
+
+    for(int i = 0; i < vertList.size(); i++){
+        ofs << "v " << vertList[i][0] << " " << vertList[i][1] << " " << vertList[i][2] << std::endl;
+    }
+
+    ofs << std::endl;
+
+    for(int i = 0; i < indexList.size(); i+= 3){
+        ofs << "f " << indexList[i] << " " << indexList[i+1] << " " << indexList[i+2] << std::endl;
+    }
+
+    ofs.close();
+
 }
 
 int main() {
@@ -281,11 +324,6 @@ int main() {
     /// Example rendering a mesh
     /// Call to compile shaders
     renderMesh.init();
-
-    /// TODO: write functions to create different objects:
-        /// -sphere
-        /// -cylinder
-        /// -read in .obj file
 
     /// Initialize vector/textures/index/normal lists
     std::vector<Vec3> vertList;
@@ -301,15 +339,16 @@ int main() {
     //loadCube(renderMesh, vertList, indexList, normList, origin, size);
 
     /// Load sphere vertices, indices, and normals (pending)
-    //loadIcoSphere(renderMesh, vertList, indexList, normList, origin, size, 1);
+    //loadIcoSphere(renderMesh, vertList, indexList, normList, origin, size, 4);
 
     /// Load cylinder vertices, indices, and normals (pending)
     //loadCylinder(renderMesh, vertList, indexList, normList, origin, size, height, 12);
 
     /// Load mesh from .obj filepath
     const char * path = "bunny.obj";
-    //loadObjFopen(path, renderMesh, vertList, tCoordList, indexList, normList);
-    //loadObjIfstream(path, renderMesh, vertList, indexList);
+    loadObj(path, renderMesh, vertList, tCoordList, indexList, normList);
+
+    writeObj(vertList,indexList);
 
     /// TODO: get textures working
 
@@ -357,23 +396,18 @@ int main() {
     auto &window2 = app.create_window([&](Window &window){
         int width, height;
         std::tie(width, height) = window.get_size();
-
         imrenderer.begin_frame(width, height);
-
         ImGui::BeginMainMenuBar();
         ImGui::MenuItem("File");
         ImGui::MenuItem("Edit");
         ImGui::MenuItem("View");
         ImGui::MenuItem("Help");
         ImGui::EndMainMenuBar();
-
         ImGui::Begin("Test Window 1");
         ImGui::Text("This is a test imgui window");
         ImGui::End();
-
         glClearColor(0.15f, 0.15f, 0.15f, 1);
         glClear(GL_COLOR_BUFFER_BIT);
-
         imrenderer.end_frame();
     });
     window2.set_title("imgui Test");
